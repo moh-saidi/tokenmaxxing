@@ -1,0 +1,13 @@
+A race condition happens when two threads touch shared state without synchronization, so the result depends on timing.
+
+Example: `count += 1` is three steps — read, add, write. Two threads can both read `0` and both write `1`; one increment is lost.
+
+```python
+lock = threading.Lock()
+def inc():
+    with lock:              # only one thread inside at a time
+        global count
+        count += 1
+```
+
+Fix: wrap the read-modify-write in a mutex (or use an atomic operation).

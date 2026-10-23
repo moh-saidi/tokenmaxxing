@@ -1,0 +1,17 @@
+**1. SQL injection — critical.** `req.query.id` is interpolated straight into the query. `?id=0 UNION SELECT ...` (or stacked statements, driver-dependent) reads arbitrary tables. Use a parameterized query: `db.query('SELECT ... WHERE id = $1', [id])`.
+
+**2. Broken access control / IDOR — high.** No auth or ownership check. Anyone can enumerate every user by walking integer ids.
+
+**3. `SELECT *` over-exposure — high.** Returns password hashes, reset tokens, internal flags, full PII. Select explicit columns.
+
+**4. No input validation / type confusion — high.** `id` is unvalidated and not necessarily a string: `?id=1&id=2` yields an array, `?id[$ne]=1` yields an object under Express's extended query parser. Result is `1,2` / `[object Object]` in the SQL, or operator injection if the driver/ORM accepts objects. Missing `id` becomes `undefined` → syntax error. Coerce and validate as a positive integer.
+
+**5. Unhandled async rejection — medium.** `async` handler with no `try/catch`. Express 4 does not catch rejected promises: the request hangs and you get a process-level unhandled rejection. Express 5 forwards it, but still a bare 500. Wrap or use an async wrapper.
+
+**6. Error/stack leakage — medium.** DB errors reach the default error handler; stack traces and schema details can leak in non-production.
+
+**7. Wrong response contract — medium.** `db.query` often returns a result wrapper, not rows, so `res.json(user)` may serialize driver metadata instead of the user. Zero rows returns `[]`/200 rather than 404.
+
+**8. No rate limiting — low/medium.** Enables automated enumeration and scraping of the user table.
+
+**9. PII cached via GET — low.** GET responses are cacheable by browsers/proxies. Add `Cache-Control: no-store`.

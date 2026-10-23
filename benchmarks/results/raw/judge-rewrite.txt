@@ -1,0 +1,7 @@
+A correctness=5 completeness=5 clarity=5
+
+B correctness=5 completeness=5 clarity=5
+
+C correctness=5 completeness=5 clarity=4
+
+Verdict: B is best — it preserves all facts and reads most cohesively; C is slightly choppier.

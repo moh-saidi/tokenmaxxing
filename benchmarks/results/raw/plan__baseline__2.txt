@@ -1,0 +1,68 @@
+# 8-Week Monolith → Modular Monolith (6 engineers)
+
+**Ground rules:** no new services, no network calls between modules. Extract in place behind interfaces, one module at a time, each shippable on its own. Modular monolith = code boundaries + enforced dependency rules + per-module schemas, not deployment boundaries.
+
+## Team split (constant across all 8 weeks)
+- **2 extractors** – do the refactoring pair-style, module by module.
+- **1 platform/DevEx** – build tooling, CI boundary checks, test harness, feature flags.
+- **1 domain analyst** – maps dependencies, writes ADRs, owns data/invariant inventory.
+- **2 feature engineers** – keep the product shipping; also write characterization tests for code being moved.
+Rotate one person per phase so knowledge doesn't concentrate.
+
+## Phases
+
+**Week 1 – Discovery & boundaries**
+- Static dependency graph (imports, DB table access, shared globals). Rank coupling hotspots.
+- Define 4–6 candidate modules by business capability, not by layer.
+- Inventory: every table, its true owner, cross-module writes, shared transactions.
+- Baseline metrics: build time, test time, deploy frequency, incident rate. These are the success criteria.
+- Pick **one pilot module** with low coupling and high pain.
+- Decision gate: written module map + seam list signed off by the team. No code yet.
+
+**Weeks 2–3 – Scaffolding & guardrails**
+- Create the module directory structure, internal public API per module (one entry point per module).
+- Add automated boundary enforcement (ArchUnit / dependency-cruiser / import-linter) to CI on day one, warnings first, then hard fail.
+- In-process event bus for cross-module side effects (replaces direct calls where appropriate).
+- Extract a shared kernel for genuinely common types only — keep it small and frozen.
+- Stand up characterization tests around the pilot module's behavior; target coverage on that seam, not globally.
+- Build the rollback mechanics now: per-module feature flag, expand/contract migration pattern, one-command revert deploy.
+
+**Weeks 4–6 – Extract, one module per ~1.5 weeks**
+- Strangler pattern: new module API in front, legacy implementation behind it, flag selects the path.
+- **Pilot module (Weeks 4–5):** highest learning value, lowest blast radius. Do it slowly; the pattern you set here gets copied.
+- **Module 2 (Weeks 5–6):** similar profile, run by a different pair to prove the process is repeatable.
+- Data: each module gets a logical schema (separate schema or table prefix). No cross-module table writes — go through the API or an event.
+- Transactions that span modules: convert to saga-style (event + compensating action) only where the invariant actually needs it; otherwise accept eventual consistency with an outbox.
+- Weekly demo of the extracted module running fully behind its API with the flag on.
+
+**Weeks 7–8 – Consolidate & harden**
+- Remove legacy code paths for extracted modules; delete the flags.
+- Remaining modules: either extract the cheap ones or document them as known debt with a boundary rule that keeps them from spreading.
+- Turn boundary checks from warning to blocking. Add a "no new cross-module imports" rule.
+- Update onboarding docs, ADRs, runbooks, module ownership map.
+- Retro + measure against Week 1 baseline. Publish what to do differently for the next 8 weeks.
+
+## Risks & mitigations
+
+| Risk | Mitigation |
+|---|---|
+| **Distributed monolith** – modules still call each other synchronously everywhere | Boundary linter + review rule: cross-module calls only via public API, and count them. Budget per module. |
+| **Shared tables / hidden coupling** | Data ownership inventory in Week 1; expand/contract migrations; no cross-module writes allowed by CI check. |
+| **Big-bang rewrite temptation** | Hard rule: max one module in flight, each merged and flagged. Anything not shippable in 2 weeks is scoped down. |
+| **Feature work collides with refactors** | Feature engineers keep trunk green; extractors work behind flags. Freeze only the pilot module's files. |
+| **Weak test coverage → silent behavior change** | Characterization tests before moving code; diff old vs new responses in shadow mode for a week. |
+| **Circular dependencies block extraction** | If a cycle appears, extract the shared piece into the kernel or invert with an event. Stop and fix, don't hack around it. |
+| **6 people is small – knowledge loss / bus factor** | Pair rotation, ADR per module, ownership map. No solo module. |
+| **Scope creep into microservices** | Explicit non-goal in the charter. Separate deployment is a later, separate decision. |
+
+## Rollback
+
+Three levels, decided in advance:
+
+1. **Per-module (routine):** flip the feature flag back to the legacy path. This is the default and must be possible for every module until Week 8. Requirement: both paths stay live and tested until the module is declared done.
+2. **Per-deploy (fast):** revert the release; migrations are written expand/contract so the old code still runs against the new schema. Never ship an irreversible migration in the same release as a code switch.
+3. **Program-level (Week 4 and Week 6 gates):** if the pilot shows the boundary map is wrong or velocity is collapsing, stop extracting and keep the scaffolding (linters, module structure, events). That is a partial success, not a failure — the monolith is now at least modular in structure.
+
+**Rollback triggers, written down:** error rate or latency regression on the module's endpoints beyond agreed threshold for 24h; any data-integrity incident traced to the split; two consecutive weeks of missed extraction milestones. On trigger: flag off, postmortem, resume only with a revised seam.
+
+**What "done" looks like at Week 8:** every module has a public API and enforced boundary, no cross-module table writes, the pilot and one other module fully migrated with legacy paths deleted, and CI blocks new violations. Two modules may remain unextracted and documented — that's acceptable.

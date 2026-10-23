@@ -1,0 +1,9 @@
+[high] line 2: SQL injection — `req.query.id` interpolated into query. Use parameterized: `db.query('SELECT * FROM users WHERE id = $1', [req.query.id])`.
+
+[high] line 2: IDOR — no authorization check; any caller can fetch any user.
+
+[medium] line 2: `SELECT *` leaks password hashes and internal fields. Select explicit columns.
+
+[medium] line 2: no input validation; non-numeric `id` reaches the DB.
+
+[medium] lines 2-3: no try/catch; a rejected query causes an unhandled promise rejection instead of a 500.

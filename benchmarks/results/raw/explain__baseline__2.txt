@@ -1,0 +1,43 @@
+## Race condition
+
+A race condition is a bug that appears only when the timing of two concurrent operations lines up badly. Both operations touch the same shared state, and the result depends on which one wins the race. The code is correct in isolation, so it passes tests and fails in production under load.
+
+The classic form is check-then-act: you check a condition, then act on it, and something changes in between.
+
+### Example
+
+A ticket-booking endpoint:
+
+```python
+if tickets_left > 0:          # two requests both read 1 here
+    tickets_left -= 1         # both write 0
+    book_ticket(user)
+```
+
+Two users hit it at once. Both see `tickets_left == 1`, both pass the check, both decrement, and you've sold two seats from one. Nothing in that code is wrong line by line — the gap between the check and the write is the bug.
+
+This also shows why "just add a lock" is harder than it looks with a naive counter: the read and the write are separate steps, so a lock has to cover the whole check-then-act block, not just the decrement.
+
+### Fix
+
+Make the check and the update one atomic operation, so nothing can interleave.
+
+With a database, compare-and-set in a single statement:
+
+```python
+updated = db.execute(
+    "UPDATE events SET tickets_left = tickets_left - 1 "
+    "WHERE id = %s AND tickets_left > 0",
+    (event_id,),
+)
+if updated.rowcount == 0:
+    raise SoldOut()
+```
+
+The database guarantees the read, the test, and the write happen as one unit. Two concurrent requests can't both succeed: the second one's `WHERE` no longer matches and it gets `rowcount == 0`.
+
+If you're in-process (in-memory counter, threads), the equivalent is a mutex around the whole critical section, or an atomic primitive like `decrement_if_positive`.
+
+### How to recognise them in future
+
+Look for shared mutable state touched by more than one thread, request, or process, especially in a check-then-act or read-modify-write pattern. They're usually invisible to single-threaded tests and show up as flaky failures or duplicated records under load. The habit that catches them: when you write `if X: ...` followed by a mutation, ask whether another actor could change X in between.

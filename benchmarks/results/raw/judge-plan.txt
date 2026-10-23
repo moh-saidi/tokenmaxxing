@@ -1,0 +1,7 @@
+A correctness=5 completeness=5 clarity=5
+
+B correctness=3 completeness=2 clarity=4
+
+C correctness=4 completeness=5 clarity=5
+
+Verdict: Candidate A is best because it fits the 6-person team, gives executable weekly phases with concrete gates, and includes comprehensive risks and multi-level rollback, while C is strong but over-allocates staffing.

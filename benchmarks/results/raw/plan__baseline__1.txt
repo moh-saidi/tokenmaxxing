@@ -1,0 +1,103 @@
+# 8-Week Modular Monolith Migration Plan (6-Person Team)
+
+## Premise (state this up front)
+You cannot fully decompose a monolith in 8 weeks. The deliverable is a **modular monolith with enforced seams and 1–2 extracted modules**, plus the platform to keep going. Set that expectation with stakeholders in week 0 or you will be judged against an impossible goal.
+
+Team shape: 1 tech lead (architecture + reviews), 2 pairs on module work, 1 platform/DevOps owner, 1 rotating "legacy cartographer"/QA. Keep ~20% capacity unallocated for the unplanned.
+
+---
+
+## Phase 0 — Baseline & Targeting (Week 1)
+
+- **Dependency map**: static analysis + runtime call tracing. Produce a module candidate graph, not a perfect one.
+- **Data ownership map**: which tables each domain writes. Multi-writer tables are your real blockers — flag them now.
+- **Baseline metrics** you will re-measure in week 8: build time, deploy lead time, change failure rate, MTTR, test coverage per area, p95 latency on the top 5 endpoints.
+- **Pick 2 target modules.** Score on: change frequency × coupling (low) × business pain (high) × blast radius (low). Typical winners: notifications, search, reporting, billing read-path. Avoid auth, payments write-path, and anything with shared transactions.
+- **Write 3 ADRs**: module contract, data ownership rule, cross-module communication rule (sync call vs. event).
+
+**Gate:** targets agreed, baseline recorded, ADRs merged.
+
+---
+
+## Phase 1 — Guardrails First (Weeks 1–2, overlaps Phase 0)
+
+Build the safety net *before* moving code. This is the phase teams skip and regret.
+
+- **Enforce boundaries in CI** — ArchUnit / dependency-cruiser / import-linter. A boundary that isn't a failing build is a comment.
+- **Contract tests** at each module facade.
+- **Feature flags** + a kill switch per module path.
+- **Observability**: trace IDs across the seam, per-module latency/error metrics, so you can tell *which module* broke.
+- **Expand/contract migration tooling** and a rule: additive schema changes only during the migration.
+- **Characterization tests** on the first target module — pin current behavior, including the bugs you intend to keep for now.
+
+**Gate:** CI fails on a deliberate boundary violation; a flag flip has been rehearsed in staging.
+
+---
+
+## Phase 2 — Pilot Extraction (Weeks 3–5)
+
+Pick the *lowest-risk* module, not the most painful one. You are buying a repeatable pattern, not a win.
+
+- **Branch by abstraction**: introduce the facade/interface, route callers through it while the old implementation still sits behind it.
+- Move code behind the seam in small PRs. No behavior changes in the same PR as a move.
+- Ship behind a flag; run shadow/dual-read where the operation is safe to duplicate.
+- Give the module its own **schema** (separate DB schema, same server — do not split servers yet).
+- Delete the old path only after a full week of clean production traffic.
+
+**Gate:** zero inbound direct DB access into the module; contract tests green; legacy path deleted.
+
+---
+
+## Phase 3 — Second Module + Event Seam (Weeks 6–7)
+
+- Repeat Phase 2 — should take half the time if the pattern is real. If it doesn't, your Phase 1 was thin; say so rather than pushing through.
+- Replace the highest-coupling direct calls with **domain events + transactional outbox**. This is the step that prevents a distributed monolith.
+- Physically separate schemas; add a read-only contract if another module genuinely needs the data.
+
+**Gate:** two modules independent, events flowing, no new synchronous cross-module calls.
+
+---
+
+## Phase 4 — Harden & Decide (Week 8)
+
+- Remove dead legacy code and flags.
+- Re-measure against baseline. Publish the delta honestly, including the velocity dip.
+- Architecture review: where are the remaining seams weak?
+- **Explicitly defer** the microservices question to next quarter with the extraction roadmap attached.
+
+---
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Big-bang rewrite creep | High | Written scope: 2 modules max. Any third requires a scope change. |
+| Distributed monolith (shared DB, sync chains) | High | Data ownership rule in CI; outbox for cross-module; review any new sync call. |
+| Behavior regressions during code moves | High | Characterization tests first; moves and changes in separate PRs; flags. |
+| Boundary churn / analysis paralysis | Medium | Timebox modeling to 3 days; boundaries are revisable, not sacred. |
+| Velocity dip alarms stakeholders | Medium | Publish the expected dip in week 0 with the recovery curve. |
+| Shared transactions break on split | Medium | Detect in Phase 0; those modules are excluded from the 8-week scope. |
+| Key-person dependency | Medium | Pair on every extraction; ADRs are the handoff artifact. |
+| CI build time balloons | Medium | Per-module build targets from Phase 1; budget check weekly. |
+
+---
+
+## Rollback
+
+Rollback is designed in, not improvised. Three independent levers:
+
+1. **Flag flip** — every extraction ships dark, then ramps. Rollback = disable flag, no deploy, seconds. Rehearsed in staging in Phase 1.
+2. **Seam inversion** — the facade can be pointed back at the legacy implementation because you kept it alive for a week. This is why you don't delete code on day one.
+3. **Data** — expand/contract only: add columns/tables, dual-write, reconcile, then read-switch, then drop *next* release. Never a destructive migration in the same release as a code move. Keep a reconciliation job running for the duration.
+
+**Rollback triggers** (pre-agreed numbers, not vibes): error rate >2× baseline for 15 min, p95 latency >30% regression, or any data divergence in reconciliation. On trigger: flip the flag, page the owner, post-mortem within 48h — rollback is not a failure, hiding it is.
+
+**Drill before each extraction**: roll back in staging, time it, confirm the data reconciliation is clean.
+
+---
+
+## Definition of done (per module)
+
+Own schema · no inbound direct DB access · enforced boundary in CI · contract tests · flag removed · observability live · ADR updated · legacy path deleted.
+
+**The real success metric for week 8:** the team can extract the third module without the tech lead in the room.

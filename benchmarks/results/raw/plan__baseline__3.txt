@@ -1,0 +1,112 @@
+## Scope reality check
+
+Eight weeks with six people will not modularize a large monolith completely. Plan it as **tranche one**: boundaries defined and enforced, 2–4 modules extracted, the pattern proven and repeatable. Say this out loud to stakeholders on day one — otherwise the plan fails on expectation, not execution.
+
+**Non-goals:** no microservices, no big-bang rewrite, no framework upgrade, no database-per-module (separate schemas in one DB is enough at this stage).
+
+**Definition of done:** a new feature can be built and shipped inside one module without touching others, and CI rejects the build if it tries.
+
+---
+
+## Team shape
+
+| Role | Count | Owns |
+|---|---|---|
+| Tech lead / architect | 1 | Module map, boundary decisions, ADRs, unblocks |
+| Engineers | 4 | Two extraction streams (2 each) |
+| QA / platform engineer | 1 | Contract tests, CI fitness functions, observability, rollback drills |
+
+Everyone stays hands-on. The architect who only draws diagrams is a cost, not a role.
+
+---
+
+## Phases
+
+### Week 1 — Discovery and baseline (no production code changes)
+- Event storming on the top 3 business capabilities; map code dependencies *and* runtime ones (shared transactions, caches, sessions, DB joins across would-be boundaries).
+- Rank candidate seams by: change frequency, coupling, blast radius, team familiarity.
+- Draft module map, shared kernel contents, integration rules (in-process API calls and domain events only; no cross-module table access).
+- Stand up baseline metrics: deploy frequency, change failure rate, p95 latency, build time, cross-directory PR rate.
+
+**Gate:** module map and extraction backlog signed off. If boundaries are contested, resolve now — this is the cheapest week to be wrong.
+
+### Week 2 — Guardrails before movement
+- Create the module skeleton and enforce it in CI: dependency rules (ArchUnit, import-linter, eslint boundaries — whatever fits the stack) that **fail the build** on illegal imports.
+- Extract the shared kernel: IDs, auth context, logging, config, error types. Nothing business-specific.
+- Contract test harness and feature-flag plumbing in place; flags default off.
+
+**Gate:** an intentionally illegal import fails CI. Prove it, don't assume it.
+
+### Weeks 3–4 — Pilot extraction
+Pick the module with **high change frequency and low coupling** — not the easiest one, and not the most important one. You want learning plus visible payoff.
+
+- Strangler pattern: new module holds the logic, legacy code delegates to it behind a flag.
+- Characterization tests written against current behavior *before* any move.
+- Give the module its own schema. No cross-module joins; reads go through the module's API.
+- Characterize cross-boundary transactions explicitly — this is where in-process modularization usually breaks.
+- **Week 4: run a rollback drill.** Flip the flag back in staging, then in production, and time it.
+
+**Gate:** pilot live behind a flag, legacy path deleted or deletable, drill completed. If the pilot is painful, stop and fix the pattern rather than scaling it.
+
+### Weeks 5–7 — Two parallel extraction streams
+- Two pairs, one module each. Platform engineer keeps CI, test infra, and observability ahead of them.
+- Order per module: contract tests → move code → move data → delete legacy. Never skip to the last step.
+- Schema changes use expand/contract: add new, dual-read, backfill, switch writes, soak, then drop old. Keep old columns for the soak period — they are your rollback.
+- Cross-module side effects become domain events; use an outbox table so events aren't lost in a transaction rollback.
+- Weekly demo and 30-minute retro. Boundaries that prove wrong get adjusted in an ADR, not silently.
+
+### Week 8 — Harden, clean, hand over
+- Delete dead code and expired flags. Unexecuted flags are debt with a delay fuse.
+- Finalize fitness functions, module ownership docs (CODEOWNERS per module), runbooks.
+- Measure against the week-1 baseline; write the retro and the tranche-two backlog.
+
+---
+
+## Risks
+
+| Risk | Why it bites | Mitigation |
+|---|---|---|
+| **Wrong boundaries** | Rework cost grows with every week you delay the discovery | Pilot first; treat boundaries as reversible; ADR any change |
+| **Distributed monolith in a box** | Chatty calls and shared tables recreate the coupling you removed | CI enforcement, schema ownership, coupling metrics reviewed weekly |
+| **Data coupling** | Shared tables are the real monolith | Expand/contract, no dual-write, outbox, backfill with reconciliation |
+| **Hidden runtime coupling** | Shared transactions, caches, and sessions don't show in import graphs | Runtime dependency mapping in week 1 — non-negotiable |
+| **Thin test coverage** | You can't refactor what you can't verify | Characterization tests before touching anything; no exceptions |
+| **8-week overrun** | Tranche scope creeps into "finish the monolith" | Fixed tranche, written non-goals, gate at week 4 |
+| **Parallel stream conflicts** | Two pairs editing the same files | CODEOWNERS, trunk-based development, small PRs, daily merge |
+| **Latency regression** | Extra indirection on hot paths | Benchmark before/after each extraction; no network hops at this stage |
+| **Team fatigue** | Migration work is invisible and unrewarding | Weekly demos of deleted code, visible metrics, rotate who does the boring parts |
+
+---
+
+## Rollback
+
+**Core principle:** the system stays a single deployable the whole time. Rollback means deploying the previous artifact or flipping a flag — never restoring a second system.
+
+**Layers, fastest first:**
+
+1. **Flag flip** — new module path off, legacy path serves traffic. Target: under 15 minutes.
+2. **Redeploy previous artifact** — the legacy code is still present and functional through the soak period. Target: under 1 hour.
+3. **Revert the PR** — clean revert commits, no squash-mangled history on extraction branches.
+4. **Data** — old columns and tables remain until soak ends. If a backfill wrote wrong data, restore from the pre-migration snapshot and reconcile from the outbox.
+
+**Triggers (pre-agreed, not debated at 2 a.m.):**
+- Error rate above baseline +50% for 15 minutes
+- p95 latency above baseline +30% sustained
+- Any data integrity alarm
+- Failed production smoke or contract test
+
+**Rules that make rollback real:**
+- No destructive migration until the module has soaked at least two weeks.
+- Every extraction ships behind a flag, including "obviously safe" ones.
+- The rollback drill in week 4 is mandatory. An untested rollback is a hope, not a plan.
+- One named owner per extraction with authority to trigger rollback without a meeting.
+
+---
+
+## Exit criteria for week 8
+
+- 2–4 modules extracted with independent schemas and no cross-module imports.
+- CI blocks illegal dependencies on every PR.
+- Rollback demonstrated live, timed, and documented.
+- A new feature shipped entirely inside one module by someone who didn't build it.
+- Tranche-two backlog written, with the next 3 modules ranked.

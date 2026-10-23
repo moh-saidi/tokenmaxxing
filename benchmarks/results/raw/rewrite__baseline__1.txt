@@ -1,0 +1,1 @@
+On 12 March at 14:00 UTC, the engineering team began the deployment, updating 12 services. After the update, error rates rose from 0.2% to 3.1% for approximately 18 minutes. At 14:22 UTC, the team decided to roll back. Once the rollback was complete, error rates returned to 0.2%.

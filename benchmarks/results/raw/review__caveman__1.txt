@@ -1,0 +1,17 @@
+1. **SQL injection — critical.** `${req.query.id}` interpolated into SQL. `?id=0 OR 1=1` dumps table; stacked/UNION can read other tables. Use `db.query('SELECT ... WHERE id = $1', [id])`.
+
+2. **IDOR — critical.** No auth check. Any caller reads any user by id. Verify session owns `id` or restrict query by authenticated user.
+
+3. **`SELECT *` leak — high.** Returns every column to client, including password hash, tokens, email. Name columns explicitly.
+
+4. **No input validation — high.** `req.query.id` may be array (`?id=1&id=2`) or object (`?id[a]=1`) under qs parsing. Array stringifies to `1,2` or spreads into SQL. Coerce and validate integer.
+
+5. **Missing id → error path — medium.** `undefined` reaches SQL, produces syntax error, 500.
+
+6. **No error handling — medium.** `await` rejection unhandled. Express 4 does not catch async throws: request hangs or crashes process. Wrap in try/catch or use Express 5. Do not send raw error to client.
+
+7. **No 404 — low.** Empty result returns `[]` with 200. Leaks existence oracle either way.
+
+8. **No rate limit — low.** Endpoint enumerable by sequential id.
+
+9. **No row limit — low.** Crafted predicate returns full table in one response.

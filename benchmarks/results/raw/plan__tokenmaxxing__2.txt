@@ -1,0 +1,9 @@
+8 weeks, four 2-week phases; modular monolith means in-process boundaries, no services.
+
+- W1–2: map domains, agree dependency rules, choose enforcement (ArchUnit or module framework), pick one pilot slice.
+- W3–4: extract pilot behind module API/facade; no cross-module table access; add CI fitness tests.
+- W5–6: migrate 2–3 modules, one per pair, strangler adapter at the seam, still one deployable.
+- W7–8: contracts, blocking architecture checks, purge shortcut imports, name module owners; buffer.
+
+Risks: hidden coupling, shared-table data coupling, velocity dip, six-person bus factor across parallel streams.
+Rollback: keep single artifact and schema; each module sits behind an adapter plus flag, so revert means flipping the flag and restoring the old import graph — no data migration to undo.

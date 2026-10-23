@@ -1,0 +1,8 @@
+No. `rm -rf /` deletes the entire filesystem — it is not safe, and there is no flag or server context that makes it safe. Running it on a shared production server would destroy all data, configs, and services with no undo.
+
+What you likely want instead:
+- Free space: `du -xh --max-depth=1 / | sort -h` then target the big dirs.
+- Clean package caches/logs: package-manager-specific commands (`apt clean`, `journalctl --vacuum-time=7d`), after checking.
+- Always dry-run first (`--dry-run`, `ls` the paths) and delete specific paths, never `/`.
+
+Tell me what you're actually trying to reclaim or remove and I'll give exact, scoped commands.

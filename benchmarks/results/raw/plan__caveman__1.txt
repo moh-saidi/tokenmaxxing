@@ -1,0 +1,65 @@
+## Shape
+
+Modular monolith, not microservices. One process, one deploy, one DB. Boundaries are code-level: module dirs, explicit public API per module, no cross-module imports of internals, enforced in CI. That constraint is what makes rollback cheap.
+
+Team: 6 devs = 3 pairs. Pair A = platform (CI rules, dependency linter, test harness). Pairs B and C = extraction crews, rotate to platform every 2 weeks so knowledge spreads.
+
+Sequencing rule: extract by **change frequency × low blast radius** first. Not by domain importance.
+
+## Phases
+
+**Week 1 — Map, don't move**
+- Build call graph and import graph of current code. Output: module candidate map.
+- Pick 3 modules. First one = smallest surface, fewest inbound calls, good test coverage.
+- Write the boundary contract for module 1: public interface, owned tables, events.
+- Agree the enforcement rule now: cross-module call only via public API package. Everything else is a build failure.
+- Exit: signed-off module map, no code changed.
+
+**Week 2 — Rails before cargo**
+- Pair A ships CI fitness functions: dependency-direction check, forbidden-import rule, per-module test target.
+- Pairs B and C add characterization tests around module 1 boundaries. Integration tests at the seam, not unit tests everywhere.
+- Exit: boundary rule fails the build when violated, proven by a deliberate test violation.
+
+**Week 3–4 — Extract module 1**
+- Move code into module dir behind a facade. Call sites keep calling the facade, so callers don't change.
+- No behavior change. No schema change. One PR per slice, each independently revertible.
+- Exit: module 1 green, dependency rule enforced, deploy unchanged.
+
+**Week 5–6 — Extract modules 2 and 3 in parallel**
+- Pairs B and C run the same playbook on separate modules, separate feature branches.
+- Only Pair A touches shared kernel, CI rules, and the build.
+- Shared kernel stays tiny: IDs, money, time, common errors. Anything else argued in review.
+- Exit: 3 modules, boundaries enforced, no shared mutable state between them.
+
+**Week 7 — Data ownership**
+- Give each module its own schema namespace and its own repository layer. Physical DB stays one instance.
+- Cross-module reads go through the owning module's API, never a join across schemas.
+- Reversible migrations only: additive first, drop later, in a separate release.
+- Exit: no cross-module SQL. Verified by a query linter or by code review checklist.
+
+**Week 8 — Harden and lock in**
+- Fix hotspots found by coupling metrics. Delete dead facades and leftover adapters.
+- Publish module ownership doc and boundary rule in the contributor guide.
+- Retrospective, then decide whether any module earns physical extraction. Answer is usually "not yet".
+- Exit: metrics baseline recorded — coupling count, build time, per-module test time.
+
+## Risks
+
+1. **Distributed monolith in disguise.** Teams add events and async queues to feel "modular". Kill it: in-process calls only, no message broker this quarter.
+2. **Data coupling is the real blocker.** Shared tables defeat module boundaries. If Week 7 slips, stop and re-plan rather than declare success.
+3. **Big-bang rewrite pressure.** Someone will propose rewriting module 2 from scratch. Rule: extraction is move-then-refactor, never rewrite, within 8 weeks.
+4. **Hidden shared state.** Singletons, globals, caches, static config. Inventory them in Week 1; each one needs a named owner.
+5. **Thin test coverage at seams.** Characterization tests are the actual safety net. Skipping them makes rollback theoretical.
+6. **Parallel branch conflicts.** Three pairs in one repo. Small PRs, daily merge to trunk, no long-lived branches.
+7. **Scope creep into features.** Any bug found during extraction gets a ticket, not a fix, unless it blocks the seam.
+8. **Six-person capacity loss.** Platform work is invisible. Budget 40% of Pair A's time; do not treat it as slack.
+
+## Rollback
+
+Three levels, all cheap because deploy unit and DB never changed:
+
+- **Slice:** revert the PR. Facade call sites are unchanged, so no caller edits needed.
+- **Module:** move the module dir back, restore old internal imports. One commit, one revert.
+- **Program:** feature-flag each module's facade in Week 3 onward, so old path stays compiled and reachable. If a module misbehaves in production, flip its flag to the legacy path. Delete flags only in Week 8, after a clean week.
+
+Prerequisites: no destructive migrations before Week 8, no table or column drops before a separate later release, and each module's flag tested in staging before Week 3 ends. Rollback without those is a story, not a plan.

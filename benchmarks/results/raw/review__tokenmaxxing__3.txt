@@ -1,0 +1,9 @@
+[critical] `req.query.id` interpolated into SQL -> SQL injection. Use parameterized query `db.query('SELECT * FROM users WHERE id = $1', [id])`.
+
+[high] No `try/catch` -> unhandled promise rejection; Express 4 won't catch async errors, request hangs. Wrap or use error middleware.
+
+[high] No authentication/authorization -> any caller can read any user by id (IDOR).
+
+[medium] `SELECT *` returns `password_hash`/tokens/internal columns -> data exposure. Select explicit columns.
+
+[medium] No validation of `id` (type/range) -> injection surface and unexpected query behavior. Validate as integer/UUID before use.

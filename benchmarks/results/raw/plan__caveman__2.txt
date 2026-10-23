@@ -1,0 +1,65 @@
+**Target:** one deployable, 3-4 modules, boundaries enforced in CI. No network calls, no separate DBs. Rollback stays cheap because nothing gets distributed.
+
+**Scope cap:** 3 modules in 8 weeks. 6 people cannot do 8.
+
+## Phase 0 — Week 1: map, baseline, freeze
+- Inventory domains from call graph and DB access, not org chart.
+- List top 3 coupling hotspots: shared tables, god classes, circular imports.
+- Baseline: build time, deploy frequency, change failure rate, test time.
+- Pick pilot: high pain, low blast radius, one pair can own it.
+- Freeze new direct cross-domain calls. Output: module map + pilot choice.
+
+## Phase 1 — Week 2: scaffolding + guardrails
+- Module layout, one public entry point per module (`api` package, internals private).
+- Add boundary checks to CI (ArchUnit, import-linter, dependency-cruiser, or Packwerk). Warn only.
+- Encode rules: no cycles, no cross-module internals, shared-kernel allowlist.
+- Exit: CI catches a deliberate violation.
+
+## Phase 2 — Weeks 3-5: extract
+- Pair A: pilot module behind facade. No behavior change. PRs under 400 lines, merge daily.
+- Pair B: second module, starts week 4, only after pilot compiles and tests pass.
+- Pair C: tooling, shared-kernel shrink, contract tests.
+- Keep old entry points as thin delegates until callers migrate.
+- Exit: zero inbound references to pilot internals.
+
+## Phase 3 — Weeks 5-7: data and contracts
+- Schema per module (Postgres schema or table prefix). Additive migrations only.
+- Kill cross-module joins. Replace with module query API; read-only views as interim.
+- In-process contract tests between modules.
+- Cap shared kernel size. New additions need review.
+
+## Phase 4 — Week 8: harden
+- Flip boundary rules to blocking.
+- Dependency graph snapshot in CI. Fail on new cycles.
+- Runbook, module ownership map, ADRs, retro.
+
+## Team split
+- Pair A: pilot. Pair B: second module from week 4. Pair C: CI rules, kernel, contracts, schemas.
+- Rotate one person weekly.
+
+## Risks
+1. **Hidden DB coupling** — biggest risk. Touches tables other modules "own". Mitigate: inventory every cross-module table access before moving code.
+2. **Circular deps** — merge blockers. Mitigate: dependency inversion, in-process events, allowlist entries with expiry dates.
+3. **Velocity dip 20-40% for 3-4 weeks.** Mitigate: cap WIP, shield one pair from interrupts, no big features on touched modules.
+4. **Boundary churn** — moving code twice. Mitigate: timebox design to one week, accept 80% right, treat boundaries as versioned.
+5. **Merge hell** — Mitigate: trunk-based, per-module PRs, feature flags.
+6. **Test gaps hide breakage** — Mitigate: characterization tests before every move.
+7. **Shared kernel becomes new god module** — Mitigate: allowlist, size metric, review gate.
+8. **Key person risk** — Mitigate: pair rotation.
+
+## Rollback
+Plain sentences here, because order matters.
+
+- No runtime rollback needed. Still one deployable, one DB, one process.
+- Each module sits behind a facade and old call path stays as a delegate. Revert one PR to restore the previous path. Keep delegates 4 weeks after cutover.
+- Data changes are additive only. New columns nullable, backfill, then read. Rollback means stop reading the new column. No drops before week 8+.
+- Boundary rules are a config flag. Flip blocking back to warn in one commit.
+- Pilot overruns by more than 2 weeks: abandon that boundary, keep the tooling. Sunk cost stays small.
+- Release stability drops: freeze extraction, keep CI in warn-only, ship features.
+
+## Exit metrics at week 8
+- Zero cycles in dependency graph.
+- Zero cross-module internal imports.
+- Pilot changed by 3 devs without collisions.
+- Build time no worse than +20%.
+- Deploy frequency same or better.

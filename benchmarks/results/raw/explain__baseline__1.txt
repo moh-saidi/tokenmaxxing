@@ -1,0 +1,72 @@
+## What it is
+
+A race condition is a bug where the **correctness of your code depends on timing** — specifically, on the order in which two or more things happen, when that order isn't guaranteed.
+
+The usual setup: two threads (or two requests, or two event handlers) touch the same shared, mutable state. Either order is possible, so either result is possible.
+
+The mental trap for juniors is assuming that one line of source code runs as one indivisible step. Often it doesn't:
+
+```python
+balance -= 30
+```
+
+is really three steps at the machine level: **read** the value, **compute** the new value, **write** it back. Another thread can run in the gap between the read and the write.
+
+## Example
+
+A bank account with $100, and two threads each withdrawing $30 at the same time.
+
+```python
+import threading
+
+balance = 100
+
+def withdraw(amount):
+    global balance
+    current = balance          # read
+    # any real work here widens the window: a DB call, a log write, a context switch
+    balance = current - amount # write
+
+t1 = threading.Thread(target=withdraw, args=(30,))
+t2 = threading.Thread(target=withdraw, args=(30,))
+t1.start(); t2.start(); t1.join(); t2.join()
+
+print(balance)   # expected 40 — but often prints 70
+```
+
+What happens:
+
+| Step | Thread 1 | Thread 2 | `balance` |
+|---|---|---|---|
+| 1 | reads `100` | | 100 |
+| 2 | | reads `100` | 100 |
+| 3 | writes `70` | | 70 |
+| 4 | | writes `70` | **70** |
+
+Both threads read 100, both computed 100 − 30, both wrote 70. One withdrawal was silently lost. $30 vanished.
+
+This is called a **lost update**, and it's the most common shape of race condition: a read-modify-write that isn't atomic.
+
+The nastiest part is that this code often passes. Run it on your laptop and you may get 40 every time, because the window is microseconds wide. Under real concurrency in production it fails intermittently, which is why race conditions have a reputation for showing up only in prod, only under load, and never while you're watching.
+
+## The fix
+
+Make the read-modify-write **atomic** — one thread at a time gets to be inside it. A mutex/lock is the direct way:
+
+```python
+lock = threading.Lock()
+
+def withdraw(amount):
+    global balance
+    with lock:                      # only one thread here at a time
+        if balance < amount:
+            raise ValueError("insufficient funds")
+        balance -= amount
+```
+
+Two things worth noticing:
+
+1. The lock covers the **check and the update together**. Locking only the `balance -= amount` line would fix the lost update but leave a check-then-act race (two threads both see enough money, both withdraw).
+2. The rule of thumb generalizes: take a lock, or use an atomic primitive (compare-and-swap, `Interlocked`/`atomic` in C++/Go), or let the database do it with a transaction and the right isolation level — but *something* has to make the sequence indivisible.
+
+The general diagnosis for any suspected race is always the same question: **what shared mutable state is being read, then written, without synchronization in between?** No shared mutable state, or properly synchronized access to it, and there's no race.

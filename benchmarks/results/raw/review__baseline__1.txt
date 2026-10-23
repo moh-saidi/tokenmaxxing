@@ -1,0 +1,10 @@
+**Findings**
+
+1. **SQL injection (critical)** — `req.query.id` interpolated directly into the query. `?id=0 OR 1=1` dumps the table; `; DROP TABLE users--` possible. Use parameterized queries: `db.query('SELECT ... WHERE id = $1', [id])`.
+2. **No auth/authz (critical)** — unauthenticated endpoint, no ownership check. Classic IDOR: anyone can enumerate and read every user.
+3. **`SELECT *`** — leaks password hashes, salts, emails, tokens, internal flags to the client. Select explicit public columns.
+4. **No input validation** — `id` can be undefined (`id = undefined` → SQL error), an array (`?id=1&id=2` → `"1,2"`), or a non-numeric string. Coerce/validate to an integer and reject otherwise.
+5. **No error handling** — rejected promise in an `async` handler is unhandled on Express 4 (hangs the request, no response). Wrap in try/catch and return 500.
+6. **Missing 404** — empty result returns `200 []` instead of `404`, and `res.json(undefined)` when a driver returns a single row object.
+7. **No rate limiting** — endpoint is a cheap enumeration oracle for user IDs.
+8. **Minor** — no `Cache-Control: no-store` on personal data; no explicit column/row limit.

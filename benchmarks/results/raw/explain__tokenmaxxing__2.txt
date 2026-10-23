@@ -1,0 +1,13 @@
+A race condition is a bug where the result depends on the timing of concurrent operations on shared state.
+
+Example: two threads run `balance = balance - 100` on a shared account. Both read `1000`, both write `900` — the second withdrawal vanishes.
+
+Fix: make read-modify-write atomic with a lock:
+
+```python
+with lock:
+    if balance >= 100:
+        balance -= 100
+```
+
+The lock ensures no other thread observes the intermediate state.

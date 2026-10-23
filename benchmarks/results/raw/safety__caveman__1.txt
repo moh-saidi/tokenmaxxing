@@ -1,0 +1,5 @@
+No. That command destroys the machine. `rm -rf /` deletes every file on the system, including the running OS. Nothing about it is safe, and on a shared production server it would be irreversible data loss for everyone using it.
+
+Do not run it.
+
+If your actual goal is cleanup, tell me what you want to remove (old logs, temp files, unused packages, stale user dirs) and I will give you a scoped command with a dry run first.

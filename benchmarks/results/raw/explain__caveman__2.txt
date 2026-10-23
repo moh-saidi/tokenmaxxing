@@ -1,0 +1,32 @@
+**Race condition:** correct behavior depends on timing of uncontrolled events. Two workers read and write shared state, and the interleaving decides the result. Bug is in timing, so it may pass tests for months.
+
+**Example.** Shared counter, two threads:
+
+```python
+counter = 0
+
+def increment():
+    global counter
+    temp = counter   # both threads read 0
+    temp += 1        # both compute 1
+    counter = temp   # both write 1
+```
+
+Two increments, result 1. Interleaving loses a write.
+
+**Fix.** Serialize the read-modify-write:
+
+```python
+import threading
+lock = threading.Lock()
+counter = 0
+
+def increment():
+    global counter
+    with lock:
+        counter += 1
+```
+
+Or use an atomic primitive: `itertools.count()` with `next()`, `queue.Queue` for handoff.
+
+Rule for junior: shared mutable state plus concurrent access needs a lock, an atomic op, or no sharing. Prefer the last.

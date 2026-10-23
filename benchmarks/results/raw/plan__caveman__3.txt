@@ -1,0 +1,80 @@
+# Modular Monolith Migration — 8 Weeks, 6 People
+
+## Assumptions (validate in W1)
+- One deployable, one DB, one CI pipeline.
+- Team: 5 engineers + 1 lead. Budget ~30% of capacity on migration, 70% on features.
+- No behavior change during migration. Same deployable the whole 8 weeks.
+- Success = enforced boundaries, not a service extraction.
+
+## Phases
+
+### Phase 1 — Discovery and seams (W1–W2)
+- Map call graph and table access per package. Output: dependency matrix.
+- Pick 4–6 modules by business capability. Do not pick by layer.
+- Name each module's owner (one person, not one team).
+- Capture baseline: build time, deploy time, defect rate, PR size, change lead time.
+- Add boundary lint in report-only mode. Fails nothing yet.
+
+```bash
+# example gate, Python: import-linter contract, report-only first
+lint-imports --config .importlinter   # non-blocking in W1
+```
+- Exit: written module map + owner list + baseline numbers.
+
+### Phase 2 — Boundary scaffolding (W3–W4)
+- Create module folders with a public API file and a `internal/` namespace.
+- Every cross-module call goes through the public facade. No direct imports of internals.
+- Move code, change no logic. Refactor commits only. No feature commits mixed in.
+- Lint flips to warn on new violations. Existing violations get a dated allowlist file.
+- Exit: all cross-module traffic passes a facade. Allowlist is shrinking, not growing.
+
+### Phase 3 — Data and coupling (W5–W6)
+- One module owns one table set. No shared writes.
+- Logical split first: schema-per-module or table prefix. Physical DB stays one instance.
+- Replace cross-module transactions with either single-owner calls or domain events.
+- Shrink the shared kernel. Target: shared code under ~5% of codebase.
+- Additive changes only: add columns, views, dual writes. Never destructive DDL this phase.
+- Exit: no table written by two modules.
+
+### Phase 4 — Enforce and harden (W7–W8)
+- Lint flips to error in CI. Build breaks on boundary violation.
+- Add contract tests per module public API.
+- Add per-module test isolation: module tests cannot load other modules' internals.
+- Write ADRs: module map, ownership, event contract, extraction rule.
+- Pick one module as first extraction candidate. Do not extract yet.
+- Exit: CI gate live, allowlist near-zero, metrics compared against baseline.
+
+## Risks
+
+| Risk | Signal | Mitigation |
+|---|---|---|
+| Big-bang rewrite | Branch open >1 week | Ship weekly to main. Facades first, logic later |
+| Boundary leakage via shared tables | Two modules write one table | Single-owner rule in Phase 3, lint on table access |
+| Distributed monolith in disguise | Modules chatty, N+1 fan-out | Keep in-process calls. Events only for true async |
+| Feature starvation | Feature backlog slips >20% | Fixed 30% capacity, migration work itemized in sprint |
+| Merge conflict hell | Same file touched by 2 people | Owner per module, small PRs, facade-only edits |
+| Over-abstraction | Facade wrappers with no logic | Rule: facade added only when a second caller exists |
+| No visible win | Leadership pulls funding | Baseline vs current metrics published W4 and W8 |
+
+## Rollback
+
+Migration is reversible because the deployable never split. Rollback is per phase, not one big switch.
+
+- **Phase 1:** Delete lint config. Zero code impact.
+- **Phase 2:** Revert facade commits. Facades are pure indirection, so revert is mechanical. Keep module folders: harmless.
+- **Phase 3:** All schema changes additive. Revert = stop dual writes, drop new views and columns. No data loss because old path still works.
+- **Phase 4:** Flip lint from error to warn. CI unblocks in one commit. Contracts tests stay, they only help.
+- **Never** run destructive DDL before W8 + 2 weeks of stable dual writes.
+
+Rollback triggers — any one fires, revert the phase:
+- Build time up more than 20% versus baseline.
+- Defect rate up more than 25% for two sprints.
+- Phase more than 2 weeks behind.
+- Two or more modules still need shared transactions after W6.
+
+## Definition of done
+- Boundary lint blocking in CI, allowlist under 5 entries.
+- Every module has an owner, a public API, and its own tables.
+- Shared kernel under 5% of code.
+- Build time within 20% of baseline. Deploy still one artifact.
+- ADRs merged, extraction candidate named for next quarter.

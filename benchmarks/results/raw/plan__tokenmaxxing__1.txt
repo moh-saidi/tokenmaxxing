@@ -1,0 +1,8 @@
+1. W1–2: Map module seams, define contracts/boundaries; baseline tests + metrics.
+2. W3–4: Extract 1 low-risk module behind an interface; keep monolith calls.
+3. W5–6: Move 2–3 modules; enforce boundary lint; per-module CI.
+4. W7: Data ownership split, schema changes behind versioned APIs.
+5. W8: Cutover, remove dead paths, document ownership.
+
+Risks: hidden coupling, shared-DB contention, test gaps, team bandwidth (6 people = 1 pair per module). Mitigate with boundary lint, contract tests, feature flags.
+Rollback: every module extract ships behind a flag; dual-write/dual-read until stable; revert flag to monolith path, no schema-destructive migrations before W8.

@@ -1,0 +1,18 @@
+**Critical**
+1. **SQL injection** — `req.query.id` interpolated directly into SQL. Payload `1 OR 1=1` or `1; DROP TABLE users` executes. Use a parameterized query: `db.query('SELECT * FROM users WHERE id = $1', [id])`.
+2. **IDOR / missing authz** — no auth check; anyone can read any user record by incrementing `id`. Should verify the session user matches (or is an admin).
+3. **`SELECT *`** — returns every column, likely including password hashes, reset tokens, emails, internal flags. Select explicit public fields.
+
+**High**
+4. **Unhandled async errors** — no `try/catch`; on Express 4 the rejected promise is never forwarded, so the request hangs until timeout. Wrap or add an async error wrapper (Express 5 handles this natively).
+5. **`req.query.id` type confusion** — with extended query parsing, `?id=1&id=2` yields an array and `?id[a]=1` yields an object. `${array}` becomes `1,2`; objects become `[object Object]`. Validate and coerce: parse int, reject otherwise.
+
+**Medium**
+6. **No 404** — empty result returns `200 []` (or `{rows: []}`), masking both "not found" and query bugs. Check result count.
+7. **Response shape leak** — `res.json(user)` returns the raw driver result object (`{rows, rowCount, command, fields, ...}`) if `db.query` is `pg`-style. Return `user.rows[0]` or map it.
+8. **No rate limiting** — enables enumeration and brute-force scanning of IDs.
+9. **No input length bound** — unbounded `id` string allows worst-case query cost.
+
+**Low**
+10. Sensitive-looking lookup via `GET` querystring — IDs land in access logs, proxy logs, and browser history; POST/body or opaque identifiers are safer.
+11. No `Cache-Control: private/no-store` on user PII responses.

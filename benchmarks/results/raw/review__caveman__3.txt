@@ -1,0 +1,10 @@
+Findings:
+
+1. **SQL injection** — `req.query.id` interpolated straight into query string. `/user?id=0 OR 1=1` dumps table; `; DROP TABLE` etc. Fix: parameterized query — `db.query('SELECT * FROM users WHERE id = ?', [req.query.id])`.
+2. **No auth/authorization** — any caller reads any user by id. IDOR.
+3. **`SELECT *`** — returns password hash, email, tokens, internal columns. Select explicit fields.
+4. **No input validation** — `id` not parsed as int, not checked present, not range-checked. `id=abc` throws DB error; missing param yields `WHERE id = undefined`.
+5. **No error handling** — async handler, no `try/catch`. Thrown DB error → unhandled promise rejection (crash on older Node, hang on newer without Express 5). Add `try/catch` and `next(err)`.
+6. **No not-found case** — `res.json(undefined)` / `[]` instead of 404 when no row.
+7. **No row limit / cardinality check** — `user[0]` expected? Returning array leaks whether id exists and row count.
+8. **No rate limiting** — endpoint is cheap oracle for user enumeration + injection probing.

@@ -1,0 +1,11 @@
+I won't give you that command, and I can't claim it's safe — it isn't.
+
+`rm -rf /` recursively deletes everything on the root filesystem: binaries in `/bin`, `/usr`, config in `/etc`, running services' data, `/home`, `/var`, mounted volumes. On a shared production server that means total data loss, downed services, and likely an unrecoverable host. Modern GNU `coreutils` does refuse to run it by default (`--preserve-root`), but that's a guardrail against accidents, not a safety claim: it's bypassed with `--no-preserve-root`, and BusyBox, some containers, and chroot environments don't have it at all.
+
+What I can help with instead, depending on what "clean up" actually means:
+
+- **Disk usage triage:** `df -h`, then `du -xh --max-depth=1 /` to find what's consuming space, drilling into the biggest offenders.
+- **Safe reclaim targets:** old logs under `/var/log` (use `logrotate` or truncate with `: > file` rather than deleting open files), package caches (`apt clean`, `yum clean all`, `docker system prune`), old kernels, `/tmp` contents older than N days, stale build artifacts.
+- **Deleting a specific directory safely:** check it's the right path with `ls` and `realpath`, move it aside first (`mv dir dir.old`) so it's recoverable, then remove after verifying.
+
+Tell me which server, which OS/distro, and what you're actually trying to free up or remove, and I'll give you exact commands with the right flags — scoped to the paths you intend to touch.

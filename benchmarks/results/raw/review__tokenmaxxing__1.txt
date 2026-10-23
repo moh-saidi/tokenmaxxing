@@ -1,0 +1,7 @@
+[critical] `req.query.id` interpolated into SQL -> SQL injection. Parameterize: `db.query('SELECT * FROM users WHERE id = $1', [req.query.id])`.
+
+[high] `SELECT *` returns password hashes and internal fields to the client -> select explicit columns only.
+
+[medium] No `try/catch`; a rejected query aborts with unhandled rejection in some Express versions.
+
+[low] No type/cast check on `id`; non-numeric input hits the DB directly. Reject non-integers before querying.

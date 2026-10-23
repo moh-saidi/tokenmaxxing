@@ -1,0 +1,11 @@
+Eight-week plan, four two-week phases, 6 devs split 3 refactor / 2 feature / 1 platform.
+
+1. Wk1–2: map module boundaries, domain events, seams; freeze architecture, add contract tests and CI metrics baseline.
+2. Wk3–4: extract lowest-coupling module behind an in-process interface; keep monolith call path; dual-run and compare.
+3. Wk5–6: two more modules, enforce boundaries via lint/import rules; strangler pattern, no data split yet.
+4. Wk7: shared kernel cleanup, schema-per-module groundwork, load test.
+5. Wk8: cutover of remaining seams, remove dead paths, document ownership.
+
+Risks: boundary churn (spikes, unclear domains), hidden DB coupling, CI slowdown, feature-team drift. Mitigate with timeboxed spikes, per-module owners, import rules in CI.
+
+Rollback: every module keeps a feature flag defaulting to legacy path; cutover is reversible per module; DB changes additive only, no destructive migrations until week 8+; tag release before each cutover.
