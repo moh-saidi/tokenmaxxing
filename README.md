@@ -86,58 +86,26 @@ Say `tokenmaxxing`, `be brief`, `less tokens`, `token diet`, `terse`, or `short 
 
 ## Benchmark
 
-Measured on 7 tasks with `deepseek-v4.1-flash-free`, fresh session per run, `cl100k_base` token counts. Full method and raw outputs are in [`benchmarks/`](benchmarks/).
+Measured on 7 tasks with `deepseek-v4.1-flash-free`, fresh session per run, `cl100k_base` token counts.
 
 | Use case | Default | Caveman | tokenmaxxing | vs Default | vs Caveman |
 |---|---:|---:|---:|---:|---:|
-| Explain concept | 628 | 232 | **106** | -83% | -54% |
-| Rewrite text | 77 | 74 | **73** | -5% | -1% |
+| Explain concept | 628 | 232 | 106 | -83% | -54% |
+| Rewrite text | 77 | 74 | 73 | -5% | -1% |
 | Fix bug | 62 | 62 | 62 | 0% | 0% |
-| Code review | 392 | 299 | **130** | -67% | -56% |
+| Code review | 392 | 299 | 130 | -67% | -56% |
 | Implement function | 95 | 97 | 97 | +2% | 0% |
-| Migration plan | 1,417 | 987 | **188** | -87% | -81% |
-| Safety warning | 356 | **96** | 156 | -56% | +63% |
-| **Average** | **432** | **264** | **116** | **-73%** | **-56%** |
+| Migration plan | 1,417 | 987 | 188 | -87% | -81% |
+| Safety warning | 356 | 96 | 156 | -56% | +63% |
+| Average | 432 | 264 | 116 | -73% | -56% |
 
-### Quality
-
-Scores are 1-5. Code tasks are pass/fail from executable tests.
-
-| Use case | Default | Caveman | tokenmaxxing |
-|---|---:|---:|---:|
-| Explain | 5 | 5 | 4 |
-| Rewrite | 5 | 5 | 5 |
-| Bug fix | pass | pass | pass |
-| Code review | 5 | 5 | 3.7 |
-| Implement | pass | pass | pass |
-| Plan | 5 | 5 | 3.3 |
-| Safety | 5 | 5 | 5 |
-
-### What the numbers mean
-
-- `tokenmaxxing` wins raw token reduction on prose-heavy work: -54% vs caveman on explanations, -56% on reviews, -81% on plans.
-- Code-only tasks are a tie. The code payload dominates; both skills leave code untouched.
-- Caveman wins completeness on high-stakes work. `tokenmaxxing` missed a critical IDOR finding in 1 of 3 review runs and produces a much thinner migration plan.
-- Caveman wins safety concision. Both are safe, but caveman says it in fewer tokens. `tokenmaxxing` spends more to offer scoped alternatives, by design.
-
-Use `tokenmaxxing` for everyday explanations, rewrites, status updates, and routine coding. Use caveman or plain prose for security reviews, architecture plans, and high-stakes or ambiguous work.
-
-## Why it can beat caveman on tokens
-
-Caveman compresses tone. `tokenmaxxing` also compresses structure:
-
-- Answer-only by default, instead of answer + reason + next step.
-- Hard prose caps instead of sentence-level style advice.
-- No decoration, headers, or recaps.
-- Delta-only output and `path:line` citations.
-- Retrieval discipline that cuts tool output, not just the final message.
-- A 689-token activation cost vs caveman's 1,166 tokens, so it does not eat its own savings.
+Full quality scores, method, raw outputs, and limitations are in [`benchmarks/`](benchmarks/).
 
 ## Repo layout
 
 ```text
 skills/tokenmaxxing/SKILL.md   the skill
-docs/DESIGN.md                 design and comparison notes
+docs/DESIGN.md                 design notes
 benchmarks/                    tasks, harness, raw outputs, results
 scripts/validate.mjs           frontmatter check for CI
 .github/workflows/validate.yml CI validation
@@ -149,13 +117,3 @@ scripts/validate.mjs           frontmatter check for CI
 - The benchmark measures output tokens, not total session cost. Input tokens and tool output vary by agent.
 - The skill is text only. It runs no code and needs no dependencies.
 - It is not a replacement for tests, security review, or judgment.
-
-## Prior art
-
-- [caveman](https://github.com/JuliusBrussee/caveman) by Julius Brussee, Apache-2.0.
-- [laconic](https://github.com/GabrielBarberini/laconic) by Gabriel Barberini, MIT. Independent project; the name was a collision, no code was copied.
-- This repo is not affiliated with either project.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
