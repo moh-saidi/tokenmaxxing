@@ -127,4 +127,5 @@ Expect different absolute numbers on another model. Compare the same model acros
 - Output tokens only. Input tokens and tool output are not counted.
 - Manual quality scores are subjective. Judge outputs are included for inspection.
 - Raw outputs are console captures and may contain encoding artifacts. Counts strip non-ASCII.
+- These runs used the skill body before the public rename from the working name `laconic`; only the trigger name changed.
 - This benchmark is not the same as the benchmark in the caveman or laconic repositories.
